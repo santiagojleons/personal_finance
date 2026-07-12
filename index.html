@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/budget-tracker/manifest.json">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Budget Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..800&display=swap" rel="stylesheet">
+<!-- OneSignal Push Notifications -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "223ff920-9087-4e5d-85f2-c61525f6e0a8",
+        safari_web_id: "web.onesignal.auto.37bbdda8-1be5-416a-8d2a-3d51b0669a43",
+        serviceWorkerPath: "/budget-tracker/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/budget-tracker/" },
+        notifyButton: { enable: false },
+        promptOptions: {
+          slidedown: { prompts: [] }
+        }
+      });
+    });
+  </script>
+
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<!-- Edit Transaction Modal -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <h3>Edit Transaction</h3>
+    <div><label>Name</label><input id="mName" type="text"/></div>
+    <div><label>Category</label><select id="mCat" onchange="mSyncSubs()"></select></div>
+    <div><label>Subcategory</label><select id="mSub"></select></div>
+    <div><label>Amount ($)</label><input id="mAmt" type="number" min="0" step="0.01"/></div>
+    <div><label>Date</label><input id="mDate" type="date"/></div>
+    <div class="modal-btns">
+      <button class="save" onclick="saveEdit()">Save</button>
+      <button class="cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="appLoader"><div class="spin"></div><p>Loading...</p></div>
+
+<div id="authScreen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;">
+  <div class="auth-card">
+    <div class="auth-logo" style="display:flex;align-items:center;justify-content:center;gap:10px;"><svg width="28" height="28" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="rgba(255,255,255,0.07)"/><rect x="6" y="11" width="24" height="15" rx="3" stroke="rgba(255,255,255,0.6)" stroke-width="1.6"/><rect x="6" y="15.5" width="24" height="4" fill="rgba(255,255,255,0.09)"/><rect x="9" y="21" width="5" height="2.5" rx="1" fill="rgba(255,255,255,0.5)"/><circle cx="24.5" cy="22.25" r="1.75" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/><circle cx="27.5" cy="22.25" r="1.75" fill="rgba(255,255,255,0.09)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/></svg> Budget Tracker</div>
+    <p class="auth-sub">Track your money. Reach your goals.</p>
+    <form id="loginForm" onsubmit="doLogin(); return false;" autocomplete="on">
+      <div><label>Email</label><input id="authEmail" class="inp" type="email" placeholder="you@email.com" autocomplete="username" name="username"/></div>
+      <div style="margin-top:10px;"><label>Password</label><input id="authPass" class="inp" type="password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="current-password" name="password"/></div>
+      <button type="submit" class="gbtn" style="margin-top:14px;">Log In</button>
+    </form>
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0;"><div style="flex:1;height:1px;background:var(--ln2);"></div><span style="font-size:.72rem;color:var(--t3);">or</span><div style="flex:1;height:1px;background:var(--ln2);"></div></div>
+    <button id="passkeyBtn" class="gbtn ghost" style="display:flex;align-items:center;justify-content:center;gap:8px;" onclick="signInWithPasskey()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M12 12v8"/><path d="M8 16h8"/><rect x="3" y="11" width="4" height="6" rx="1"/><rect x="17" y="11" width="4" height="6" rx="1"/></svg>Sign in with Face ID / Touch ID</button>
+    <button class="gbtn ghost" style="margin-top:4px;" onclick="doSignup()">Create Account</button>
+    <div id="signupNameRow" style="display:none;margin-top:2px;"><label>Your First Name</label><input id="authName" class="inp" type="text" placeholder="e.g. Alex"/></div>
+    <button id="signupConfirmBtn" class="gbtn" style="display:none;margin-top:6px;" onclick="doSignupConfirm()">Sign Up</button>
+    <p id="authMsg" style="color:rgba(255,255,255,.4);font-size:.78rem;text-align:center;min-height:18px;"></p>
+  </div>
+</div>
+<div class="shell" style="display:none;">
+  <aside class="side">
+    <div class="side-logo"><svg width="28" height="28" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="rgba(255,255,255,0.07)"/><rect x="6" y="11" width="24" height="15" rx="3" stroke="rgba(255,255,255,0.6)" stroke-width="1.6"/><rect x="6" y="15.5" width="24" height="4" fill="rgba(255,255,255,0.09)"/><rect x="9" y="21" width="5" height="2.5" rx="1" fill="rgba(255,255,255,0.5)"/><circle cx="24.5" cy="22.25" r="1.75" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/><circle cx="27.5" cy="22.25" r="1.75" fill="rgba(255,255,255,0.09)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/></svg><h1>Budget Tracker</h1></div>
+    <div class="side-divider"></div>
+    <div class="side-section-label">Menu</div>
+    <button class="side-item active" id="nav-dashboard" onclick="switchTab('dashboard')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</button>
+    <button class="side-item" id="nav-transactions" onclick="switchTab('transactions')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>Transactions</button>
+    <button class="side-item" id="nav-add-expense" onclick="switchTab('add-expense')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Add Expense</button>
+    <button class="side-item" id="nav-categories" onclick="switchTab('categories')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Categories</button>
+    <button class="side-item" id="nav-income" onclick="switchTab('income')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Income &amp; Budget</button>
+    <div class="side-divider"></div>
+    <div class="side-section-label">Period</div>
+    <div style="padding:0 4px;"><div class="month-tabs" id="monthTabs"></div><button class="gbtn ghost sm" style="margin-top:8px;width:100%;" onclick="addMonth()">+ New Month</button></div>
+    <div class="side-divider" style="margin-top:auto;"></div>
+    <div class="side-section-label">General</div>
+    <button class="side-item" id="nav-settings" onclick="switchTab('settings')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
+    <button class="side-item danger-item" onclick="doLogout()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button>
+  </aside>
+  <main class="main">
+<div id="tab-dashboard" class="tab-panel">
+      <div class="tab-header">
+        <div>
+          <h2 class="tab-title" id="dashWelcomeTitle">Welcome Back</h2>
+          <p class="tab-sub" style="font-size:.9rem;margin-top:4px;">Here's an overview of your finances &mdash; <span id="dashMonthLabel" style="color:rgba(255,255,255,0.85);font-weight:600;"></span></p>
+        </div>
+      </div>
+      <div class="month-tabs-mobile" id="monthTabsMobile"></div>
+
+      <!-- Intro Banner -->
+      <div class="stat-row" id="statRow"></div>
+      <div class="grid" id="catGrid"></div>
+      <div id="budgetProfileBlock" style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:22px;margin-top:20px;margin-bottom:4px;">
+
+        <!-- header -->
+        
+<details class="profile-details" id="profileDetailsToggle">
+  <summary class="profile-summary">
+    <div class="profile-summary-inner"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span style="font-size:.82rem;font-weight:700;color:#ffffff;letter-spacing:.04em;text-transform:uppercase;">How This Budget Works</span>
+          </div>
+          <span id="dashProfileBadge" style="font-size:.68rem;font-weight:700;background:rgba(255,255,255,0.06);color:#ffffff;border:1px solid rgba(255,255,255,0.14);border-radius:999px;padding:2px 10px;white-space:nowrap;display:none;"></span>
+        </div></div>
+    <svg class="profile-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </summary>
+  <div class="profile-body">
+        <p style="font-size:.79rem;color:var(--muted);line-height:1.55;margin:0 0 16px;">Your income is divided into <strong style="color:var(--text);">four buckets</strong> — every dollar gets a job. Learn what each one is, then pick a profile that fits your life.</p>
+
+        <!-- category education cards — no rates, just what they ARE -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:18px;">
+
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+              <span style="font-size:1.1rem;"></span>
+              <span style="font-size:.86rem;font-weight:700;color:#ffffff;">Essentials</span>
+            </div>
+            <p style="font-size:.76rem;color:var(--muted);line-height:1.55;margin:0;">The non-negotiables — rent, groceries, utilities, insurance, transport. If you stopped paying these, life gets difficult fast.</p>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(59,130,246,0.18);border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+              <span style="font-size:1.1rem;"></span>
+              <span style="font-size:.86rem;font-weight:700;color:rgba(255,255,255,0.6);">Growth</span>
+            </div>
+            <p style="font-size:.76rem;color:var(--muted);line-height:1.55;margin:0;">Money working for future you — investing, retirement accounts (401k, Roth IRA), index funds. Also where debt payments go if you're paying off loans.</p>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(139,92,246,0.18);border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+              <span style="font-size:1.1rem;"></span>
+              <span style="font-size:.86rem;font-weight:700;color:rgba(255,255,255,0.4);">Lifestyle</span>
+            </div>
+            <p style="font-size:.76rem;color:var(--muted);line-height:1.55;margin:0;">Your quality-of-life spending — dining out, hobbies, subscriptions, travel, entertainment. Important to have, but the first place to trim if needed.</p>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(245,158,11,0.18);border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+              <span style="font-size:1.1rem;">️</span>
+              <span style="font-size:.86rem;font-weight:700;color:rgba(255,255,255,0.45);">Savings</span>
+            </div>
+            <p style="font-size:.76rem;color:var(--muted);line-height:1.55;margin:0;">Your safety net and short-term goals — emergency fund, vacation fund, car fund, down payment. Keeps unexpected expenses from derailing your budget.</p>
+          </div>
+
+        </div>
+
+        <!-- divider -->
+        <div style="height:1px;background:var(--border);margin-bottom:16px;"></div>
+
+        <!-- profile picker heading -->
+        <div style="font-size:.78rem;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;">Choose a Profile — sets the split between buckets</div>
+
+        <!-- profile chips -->
+        <div id="dashProfileChips" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;"></div>
+
+        <!-- live breakdown (shows after profile selected) -->
+        <div id="dashProfileBreakdown" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;"></div>
+
+        <!-- tip -->
+        <div id="dashProfileTip" style="background:rgba(255,255,255,0.03);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:10px 14px;font-size:.78rem;display:none;margin-bottom:12px;"></div>
+
+        <!-- CTA -->
+        <button class="gbtn" style="width:100%;margin-top:4px;" onclick="applySelectedProfile()">Apply This Profile &amp; Set Budget &#8594;</button>
+
+      </div>
+</details>
+</div>
+
+      
+    </div>
+<div id="tab-transactions" class="tab-panel" style="display:none">
+      <div class="tab-header">
+        <div>
+          <h2 class="tab-title">Transactions</h2>
+          <p class="tab-sub">All recorded expenses for <span id="txMonthLabel">this month</span></p>
+        </div>
+        <button class="gbtn sm" style="margin-top:0" onclick="switchTab('add-expense')">+ Add Expense</button>
+      </div>
+      <div class="month-tabs-mobile" id="monthTabsMobileTx"></div>
+      <div class="card">
+        <div class="tx-table-wrap"><table><thead><tr><th>Name</th><th>Category</th><th>Subcategory</th><th>Date</th><th>Amount</th><th></th></tr></thead><tbody id="txBody"></tbody></table></div><div class="tx-cards" id="txCards"></div>
+      </div>
+    </div>
+<div id="tab-add-expense" class="tab-panel" style="display:none;">
+  <div class="tab-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+    <div><h2 class="tab-title">Add Expense</h2><p class="tab-sub">Log a new transaction</p></div>
+    <button class="gbtn ghost sm" style="margin-top:0;white-space:nowrap;" onclick="addMonth()">+ New Month</button>
+  </div>
+  <div class="card add-expense-form">
+    <div class="fg" style="margin-bottom:16px;">
+      <label>Description</label>
+      <input class="inp" id="aeNameInp" type="text" placeholder="e.g. Rent, Netflix, Groceries..." autocomplete="off"/>
+    </div>
+    <div class="ae-row">
+      <div class="fg">
+        <label>Category</label>
+        <select class="sel" id="aeCatSel" onchange="aeUpdateSubs()"></select>
+      </div>
+      <div class="fg">
+        <label>Subcategory</label>
+        <select class="sel" id="aeSubSel"></select>
+      </div>
+    </div>
+    <div class="ae-row">
+      <div class="fg">
+        <label>Date</label>
+        <input class="inp" id="aeDateInp" type="date"/>
+      </div>
+      <div class="fg">
+        <label>Amount ($)</label>
+        <input class="inp" id="aeAmtInp" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal"/>
+      </div>
+    </div>
+    <button class="gbtn" style="margin-top:6px;" onclick="aeSubmit()">Save Expense</button>
+    <p id="aeMsg" style="font-size:.75rem;color:rgba(255,255,255,.4);text-align:center;min-height:18px;margin-top:6px;"></p>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="card-title" style="padding:16px 16px 0;">Recent Transactions</div>
+    <div class="tx-table-wrap" style="padding:0;">
+      <table><thead><tr>
+        <th>Name</th><th>Category</th><th>Subcategory</th><th>Date</th><th>Amount</th><th></th>
+      </tr></thead><tbody id="recentTxBody"><tr><td colspan="6" class="empty">No transactions yet.</td></tr></tbody></table>
+    </div>
+    <div class="tx-cards" id="recentTxCards"></div>
+  </div>
+</div>
+<div id="tab-categories" class="tab-panel" style="display:none">
+      <div class="tab-header">
+        <div>
+          <h2 class="tab-title">Categories</h2>
+          <p class="tab-sub">Manage your budget categories and subcategories</p>
+        </div>
+      </div>
+      <div class="grid" id="catGridFull"></div>
+    </div>
+<div id="tab-income" class="tab-panel" style="display:none">
+      <div class="tab-header">
+        <div>
+          <h2 class="tab-title">Income & Budget</h2>
+          <p class="tab-sub">Set your income and category allocations</p>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;max-width:640px;">
+
+        <!-- INCOME CARD -->
+        <div class="card">
+          <div class="card-title"> Your Paycheck</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+            <div style="flex:1;min-width:160px;">
+              <label style="display:block;font-size:.76rem;color:var(--muted);margin-bottom:5px;">Amount per check</label>
+              <input class="inp" id="incIn" type="number" min="0" step="0.01" placeholder="e.g. 2000" oninput="updateIncomePreview();saveIncomeToState();"/>
+            </div>
+            <div style="min-width:160px;">
+              <label style="display:block;font-size:.76rem;color:var(--muted);margin-bottom:5px;">Pay frequency</label>
+              <select class="sel" id="payFreq" onchange="updateIncomePreview();saveIncomeToState();">
+                <option value="monthly">Monthly (1x/month)</option>
+                <option value="semimonthly" selected>Semi-monthly (2x/month)</option>
+                <option value="biweekly">Bi-weekly (every 2 weeks)</option>
+              </select>
+            </div>
+          </div>
+          <div id="incomePreview" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--muted);display:none;">
+          </div>
+        </div>
+
+        <!-- WEIGHTS CARD -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <div class="card-title" style="margin-bottom:0;"> Category Allocations</div>
+            <span id="incomeProfileBadge" style="font-size:.68rem;font-weight:700;background:rgba(255,255,255,0.06);color:#ffffff;border:1px solid rgba(255,255,255,0.14);border-radius:999px;padding:2px 10px;white-space:nowrap;display:none;"></span>
+          </div>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:12px;margin-top:6px;">Select a profile or enter custom percentages. Must total 100%.</p>
+          <div id="incomeProfileChips" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;"></div>
+          <div id="weightInputs" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
+          <div id="weightTotal" style="font-size:.82rem;font-weight:700;color:#ffffff;margin-bottom:16px">Total: 100%</div>
+          <button class="gbtn" style="width:100%" onclick="applyTargetsNew()">Apply</button>
+        </div>
+
+        <!-- OVERVIEW -->
+        <div class="card" style="margin-top:0;">
+          <div class="card-title">Allocation Overview</div>
+          <div id="overview"></div>
+          <div id="unallocBox" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+<div id="tab-settings" class="tab-panel" style="display:none;">
+  <div class="tab-header"><div><h2 class="tab-title">Settings</h2><p class="tab-sub">Account &amp; preferences</p></div></div>
+  <div class="settings-group">
+    <div class="settings-group-label">Account</div>
+    <div class="settings-row">
+      <div class="settings-row-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Email</span></div>
+      <span id="settingsEmail" class="settings-row-value">—</span>
+    </div>
+    <div class="settings-row" onclick="registerPasskey()" style="cursor:pointer;">
+      <div class="settings-row-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M12 12v4"/><path d="M9 18h6"/><rect x="3" y="11" width="4" height="6" rx="1"/><rect x="17" y="11" width="4" height="6" rx="1"/></svg><span>Register Face ID / Touch ID</span></div>
+      <svg class="settings-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+  <div class="settings-group">
+    <div class="settings-group-label">Notifications</div>
+    <div class="settings-row" onclick="toggleNotifications()" style="cursor:pointer;">
+      <div class="settings-row-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Push Notifications</span></div>
+      <svg class="settings-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+  <div class="settings-group">
+    <div class="settings-group-label">Data</div>
+    <div class="settings-row" onclick="exportData()" style="cursor:pointer;">
+      <div class="settings-row-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Export Transactions (.csv)</span></div>
+      <svg class="settings-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+  <div class="settings-group">
+    <div class="settings-group-label">Session</div>
+    <div class="settings-row settings-row-danger" onclick="doLogout()" style="cursor:pointer;">
+      <div class="settings-row-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Sign Out</span></div>
+    </div>
+  </div>
+  <p style="font-size:.68rem;color:rgba(255,255,255,.18);text-align:center;margin-top:20px;">Budget Tracker v1.0</p>
+</div>
+  </main>
+</div>
+<nav id="mobileNav">
+  <button class="mnav-btn active" id="mnav-dashboard" onclick="switchTab('dashboard')"><div class="mnav-pip" style="display:block;"></div><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Home</span></button>
+  <button class="mnav-btn" id="mnav-transactions" onclick="switchTab('transactions')"><div class="mnav-pip" style=""></div><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg><span>Spent</span></button>
+  <div class="mnav-fab-wrap"><button class="mnav-fab" onclick="switchTab('add-expense')" id="mnav-add-expense" aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><span class="mnav-fab-label">Add</span></div>
+  <button class="mnav-btn" id="mnav-categories" onclick="switchTab('categories')"><div class="mnav-pip" style=""></div><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span>Budget</span></button>
+  <button class="mnav-btn" id="mnav-income" onclick="switchTab('income')"><div class="mnav-pip" style=""></div><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><span>Income</span></button>
+</nav>
+
+<!-- Third-party SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- App modules — order matters: each file depends on globals defined by the ones before it -->
+<script src="js/supabase-client.js"></script>
+<script src="js/state.js"></script>
+<script src="js/helpers.js"></script>
+<script src="js/months.js"></script>
+<script src="js/income.js"></script>
+<script src="js/subcategories.js"></script>
+<script src="js/transactions.js"></script>
+<script src="js/render.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/profiles.js"></script>
+<script src="js/auth.js"></script>
+</body>
+</html>
