@@ -267,3 +267,40 @@ function renderStatCards(){
   var sr = document.getElementById('statRow');
   if(sr) sr.innerHTML = c1+c2+c3+c4;
 }
+
+// ── ANIMATED DASHBOARD TITLE ──────────────────────────────────────────────
+var DASH_TITLE_PHRASES = [
+  'Your Finances',
+  'Your Savings',
+  'Your Future',
+  'Your Budget',
+  'Your Goals'
+];
+var DASH_TITLE_INTERVAL = null;
+var DASH_TITLE_IDX = 0;
+
+function startDashTitleAnimation(){
+  stopDashTitleAnimation();
+  DASH_TITLE_IDX = 0;
+  var el = document.getElementById('dashTitleText');
+  if(el) el.textContent = DASH_TITLE_PHRASES[0];
+  DASH_TITLE_INTERVAL = setInterval(function(){
+    DASH_TITLE_IDX = (DASH_TITLE_IDX + 1) % DASH_TITLE_PHRASES.length;
+    var el = document.getElementById('dashTitleText');
+    if(!el) return;
+    el.classList.remove('fade-in');
+    el.classList.add('fade-out');
+    setTimeout(function(){
+      el.textContent = DASH_TITLE_PHRASES[DASH_TITLE_IDX];
+      el.classList.remove('fade-out');
+      el.classList.add('fade-in');
+    }, 350);
+  }, 2500);
+}
+
+function stopDashTitleAnimation(){
+  if(DASH_TITLE_INTERVAL){
+    clearInterval(DASH_TITLE_INTERVAL);
+    DASH_TITLE_INTERVAL = null;
+  }
+}

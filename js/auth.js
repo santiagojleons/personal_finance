@@ -159,8 +159,16 @@ async function initApp(user){
       CURRENT_TAB = 'dashboard';
       checkNotifStatus();
       var firstName = currentUser.user_metadata?.display_name || currentUser.user_metadata?.first_name || '';
-      var dashTitle = document.getElementById('dashWelcomeTitle');
-      if(dashTitle) dashTitle.textContent = firstName ? 'Welcome Back, ' + firstName : 'Welcome Back';
+      // Update the animated title phrases to use the user's name
+      if(firstName){
+        DASH_TITLE_PHRASES = [
+          'Your Finances, ' + firstName,
+          'Your Savings, ' + firstName,
+          'Your Future, ' + firstName,
+          'Your Budget, ' + firstName,
+          'Your Goals, ' + firstName
+        ];
+      }
       hideLoader();
       document.getElementById('authScreen').style.display = 'none';
       document.querySelector('.shell').style.display = 'grid';

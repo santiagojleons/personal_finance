@@ -21,7 +21,9 @@ function switchTab(tab){
   });
   var _mb=document.getElementById('mnav-'+tab);
   if(_mb){ _mb.classList.add('active'); var _p=_mb.querySelector('.mnav-pip'); if(_p) _p.style.display='block'; }
-  if(tab==='dashboard'||tab==='categories') render();
+  if(tab==='dashboard'){ render(); startDashTitleAnimation(); }
+  else { stopDashTitleAnimation(); }
+  if(tab==='categories') render();
   if(tab==='settings') showSettingsEmail();
   if(tab==='add-expense'){ aeInit(); renderRecentTx(); }
   if(tab==='transactions') render();
