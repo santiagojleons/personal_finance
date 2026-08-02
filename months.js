@@ -100,6 +100,38 @@ function renderMonthTabs(){
       })(keys[i]);
     }
   });
+  renderMonthPickerDropdown();
+}
+
+// ── Month Picker dropdown (Dashboard header button) ───────────────────────
+// Populates the <select> used by the "Select Month" control on the Home
+// Screen dashboard and keeps it in sync with the active month.
+function renderMonthPickerDropdown(){
+  var sel = $id('dashMonthSelect');
+  if(!sel) return;
+  var keys = Object.keys(STATE.months);
+  // Sort chronologically (by actual date, not alphabetically) so the
+  // dropdown reads naturally regardless of insertion order.
+  keys.sort(function(a,b){ return monthKeyToDate(a) - monthKeyToDate(b); });
+  var opts = '';
+  for(var i=0;i<keys.length;i++){
+    var k = keys[i];
+    opts += '<option value="'+k+'"'+(k===STATE.activeMonth?' selected':'')+'>'+k+'</option>';
+  }
+  sel.innerHTML = opts;
+}
+
+function monthKeyToDate(key){
+  var parts = key.split(' ');
+  var mi = MONTH_NAMES.indexOf(parts[0]);
+  var yr = parseInt(parts[1],10) || 0;
+  return new Date(yr, mi<0?0:mi, 1).getTime();
+}
+
+function onMonthPickerChange(){
+  var sel = $id('dashMonthSelect');
+  if(!sel || !sel.value) return;
+  switchMonth(sel.value);
 }
 
 // ── Delete Month modal (replaces native confirm(), same iOS standalone-app
@@ -142,56 +174,9 @@ function deleteMonth(key){
       ensureMonth(STATE.activeMonth, null);
     }
   }
+  renderMonthTabs();
   loadMonthIntoUI();
   render();
   if(CURRENT_TAB==='income'){ renderWeightInputs(); updateIncomePreview(); }
   saveState();
-}
-
-// ── INLINE MONTH PICKER (Dashboard overview sentence) ──────────────────────
-
-function openMonthPicker(){
-  var bg = document.getElementById('monthPickerModal');
-  if(bg) bg.classList.add('open');
-}
-
-function closeMonthPicker(){
-  var bg = document.getElementById('monthPickerModal');
-  if(bg) bg.classList.remove('open');
-}
-
-function renderMonthPickerList(){
-  var list = document.getElementById('monthPickerList');
-  if(!list) return;
-  var keys = Object.keys(STATE.months);
-  var html = '';
-  for(var i=0;i<keys.length;i++){
-    (function(k){
-      var active = k === STATE.activeMonth ? ' active' : '';
-      html += '<button class="mp-row' + active + '" onclick="selectMonthFromPicker(\'' + k.replace(/'/g, "\\'") + '\')">' +
-        '<span class="mp-row-name">' + k + '</span>' +
-        (k === STATE.activeMonth ? '<span class="mp-row-check">&#10003;</span>' : '') +
-      '</button>';
-    })(keys[i]);
-  }
-  html += '<div class="mp-divider"></div>';
-  html += '<button class="mp-row mp-row-new" onclick="addMonthFromPicker()">' +
-    '<span class="mp-row-name" style="color:var(--c-growth);">+ New Month</span>' +
-  '</button>';
-  list.innerHTML = html;
-}
-
-function selectMonthFromPicker(key){
-  if(key === STATE.activeMonth){
-    closeMonthPicker();
-    return;
-  }
-  switchMonth(key);
-  closeMonthPicker();
-}
-
-function addMonthFromPicker(){
-  closeMonthPicker();
-  // Open the New Month modal (in-app, no browser prompt needed)
-  openNewMonthModal();
 }

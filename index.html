@@ -49,6 +49,42 @@
   </div>
 </div>
 
+<!-- New Month Modal (in-app replacement for prompt(), which iOS Safari
+     silently swallows in standalone/home-screen PWA mode) -->
+<div class="modal-bg" id="newMonthModal">
+  <div class="modal">
+    <h3>New Month</h3>
+    <div><label>Month name</label><input id="nmInput" type="text" placeholder="e.g. August 2026"/></div>
+    <div class="modal-btns">
+      <button class="save" onclick="confirmNewMonth()">Create</button>
+      <button class="cancel" onclick="closeNewMonthModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Month Modal (in-app replacement for confirm(), same iOS
+     standalone-app dialog bug as prompt()) -->
+<div class="modal-bg" id="deleteMonthModal">
+  <div class="modal">
+    <h3>Delete Month</h3>
+    <p id="delMonthMsg" style="font-size:.85rem;color:var(--t2);line-height:1.5;"></p>
+    <div class="modal-btns">
+      <button class="save" style="background:#f87171;border-color:#f87171;color:#1c1c1e;" onclick="confirmDeleteMonth()">Delete</button>
+      <button class="cancel" onclick="closeDeleteMonthModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Month Picker Modal (inline month selector for dashboard) -->
+<div class="modal-bg" id="monthPickerModal">
+  <div class="modal" style="max-width:360px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h3 style="font-size:.95rem;font-weight:700;">Switch Month</h3>
+      <button class="gbtn ghost sm" onclick="closeMonthPicker()" style="margin:0;padding:4px 10px;font-size:.75rem;">Close</button>
+    </div>
+    <div id="monthPickerList" style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;"></div>
+  </div>
+</div>
 
 <div id="appLoader"><div class="spin"></div><p>Loading...</p></div>
 
@@ -92,7 +128,7 @@
       <div class="tab-header">
         <div>
           <h2 class="tab-title" id="dashWelcomeTitle">Welcome Back</h2>
-          <p class="tab-sub" style="font-size:.9rem;margin-top:4px;">Here's an overview of your finances &mdash; <span id="dashMonthLabel" style="color:rgba(255,255,255,0.85);font-weight:600;"></span></p>
+          <p class="tab-sub" style="font-size:.9rem;margin-top:4px;">Here's an overview of your finances &mdash; <span id="dashMonthLabel" class="dash-month-label" onclick="openMonthPicker()" style="color:rgba(255,255,255,0.85);font-weight:600;cursor:pointer;border-bottom:1px dashed rgba(255,255,255,0.25);"></span></p>
         </div>
       </div>
       <div class="month-tabs-mobile" id="monthTabsMobile"></div>

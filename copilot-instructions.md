@@ -95,3 +95,246 @@ When in doubt, prioritize **data integrity and predictability** over UI polish.
 - **No dead code paths.** If you replace a function (e.g. an old prompt-based flow with a modal-based one), remove the old function and its references entirely rather than leaving it unused "just in case."
 - **Comment sparingly and meaningfully** — existing files use short banner comments (`// ── SECTION NAME ──`) to divide concerns within a file. Follow this convention for new sections rather than dense inline commentary.
 - **Never suggest committing secrets.** The Supabase URL/publishable key are already present in `supabase-client.js` by design (public anon key) — do not flag or attempt to "fix" this as a secret leak, but never introduce a service-role key or any other private credential into client code.
+
+---
+
+## 5. App Architecture & Data Flow
+
+### Project Overview
+
+Budget Tracker is a **zero-based budgeting SPA** where every dollar of monthly income is allocated to one of four categories. Users set income, choose a budget profile (weight split), build subcategories, and log expenses. Data is persisted to Supabase per authenticated user, per month.
+
+**Tech:** Vanilla HTML/CSS/JS, Supabase (auth + PostgreSQL), OneSignal (push), hosted on GitHub Pages.
+
+### File Map
+
+```
+budget-tracker/
+├── index.html              # SPA shell: auth screen, sidebar, 5 tab panels, modals
+├── css/styles.css          # Dark theme design system (231 lines)
+├── js/
+│   ├── supabase-client.js  # Supabase init, currentUser, authInProgress (loads 1st)
+│   ├── state.js            # STATE object, initState(), activeData(), saveState(), loadState()
+│   ├── helpers.js          # $id(), money(), getIncome(), totalAssigned(), saveAndRender()
+│   ├── months.js           # Month CRUD, month tabs, month picker modal
+│   ├── income.js           # Paycheck input, WEIGHTS sliders, applyTargets()
+│   ├── subcategories.js    # Subcategory CRUD, budget capping, preset quick-add
+│   ├── transactions.js     # Expense entry, edit modal, delete, CSV export
+│   ├── render.js           # render(), renderStatCards(), renderRecentTx()
+│   ├── navigation.js       # switchTab() — tab visibility
+│   ├── profiles.js         # BUDGET_PROFILES, profile chips, wraps switchTab/saveIncomeToState
+│   └── auth.js             # Login/signup/passkey, initApp(), session restore (loads last)
+├── OneSignalSDKWorker.js   # OneSignal service worker
+├── months.js               # (legacy, unused)
+├── nvidiaapi.py            # (unrelated)
+└── copilot-instructions.md # This file
+```
+
+### Script Load Order (in index.html)
+
+```
+1. supabase-client.js   (sb, currentUser, authInProgress)
+2. state.js             (STATE, activeData, initState, saveState, loadState)
+3. helpers.js           ($id, money, getIncome, totalAssigned, saveAndRender)
+4. months.js            (month CRUD, depends on state + helpers)
+5. income.js            (WEIGHTS, income math, depends on state + helpers)
+6. subcategories.js     (subcategory CRUD, depends on state + helpers)
+7. transactions.js      (expense entry, depends on state + helpers + subcategories)
+8. render.js            (DOM rendering, depends on state + helpers + months)
+9. navigation.js        (switchTab, depends on render + income + transactions)
+10. profiles.js         (BUDGET_PROFILES, wraps switchTab/saveIncomeToState)
+11. auth.js             (initApp, session restore — triggers full app boot)
+```
+
+### STATE Data Model
+
+```js
+STATE = {
+  activeMonth: "2026-08",           // "YYYY-MM" key
+  months: {
+    "2026-08": {
+      income: 5000,                 // monthly take-home pay
+      perCheck: 2500,               // raw per-check amount entered by user
+      payFreq: "semimonthly",       // "monthly" | "semimonthly" | "biweekly"
+      bd: [                         // 4 budget categories (always 4)
+        {
+          name: "Essentials",       // user-editable category name
+          pool: 2500,               // category-level budget (from weights × income)
+          pct: 0.50,                // weight as decimal (0-1)
+          subs: [                   // subcategories
+            {
+              name: "Rent",
+              budget: 1500,         // subcategory budget
+              spent: 1500           // total spent in this subcategory
+            }
+          ]
+        },
+        { name: "Growth",    pool: 750,  pct: 0.15, subs: [...] },
+        { name: "Lifestyle", pool: 1250, pct: 0.25, subs: [...] },
+        { name: "Savings",   pool: 500,  pct: 0.10, subs: [...] }
+      ],
+      txs: [                        // transactions
+        {
+          id: "1690000000000abc",   // Date.now() + Math.random()
+          name: "Rent Payment",
+          cat: "Essentials",        // denormalized category name
+          sub: "Rent",              // denormalized subcategory name
+          ci: 0,                    // category index (0-3)
+          si: 0,                    // subcategory index
+          amt: 1500,                // amount (positive number)
+          date: "2026-08-01"        // ISO date string
+        }
+      ]
+    }
+  }
+}
+```
+
+### Key Global Variables
+
+| Variable | File | Purpose |
+|---|---|---|
+| `STATE` | state.js | Full app state (all months, active month) |
+| `WEIGHTS` | income.js | `[50, 15, 25, 10]` — current category weight percentages |
+| `BUDGET_PROFILES` | profiles.js | Array of 7 budget profile objects |
+| `SUBCATEGORY_PRESETS` | subcategories.js | Preset subcategory names per category |
+| `CURRENT_TAB` | navigation.js | Currently visible tab id |
+| `currentUser` | supabase-client.js | Supabase user object (null if logged out) |
+| `sb` | supabase-client.js | Supabase client instance |
+| `EDIT_ID` | transactions.js | ID of transaction being edited in modal |
+
+### User Flows
+
+#### 1. Authentication
+- On load, `auth.js` checks for existing Supabase session
+- If no session → shows `#authScreen` (login/signup form)
+- Login: email + password via `doLogin()` → `initApp(user)` → loads state, shows shell
+- Signup: email + password + first name via `doSignup()` / `doSignupConfirm()`
+- Passkey: biometric auth via `signInWithPasskey()`
+- Logout: `doLogout()` → `sb.auth.signOut()` → reload
+
+#### 2. Income Setup
+1. User navigates to Income tab (`switchTab('income')`)
+2. Enters per-check amount + selects pay frequency
+3. `updateIncomePreview()` shows calculated monthly income
+4. User selects a budget profile (chips) or adjusts weight sliders
+5. Weights must total 100% before applying
+6. `applyTargets()` → sets `income`, `perCheck`, `payFreq`, and each category's `pool` and `pct`
+7. Redirects to Categories tab with a setup banner
+
+#### 3. Category & Subcategory Setup
+1. Categories tab shows 4 category cards with editable subcategories
+2. Each category has a `pool` (total budget) — subcategory budgets must not exceed it
+3. `setBudget(ci, si, val)` enforces income cap: sub-budgets can't exceed unallocated income
+4. Quick-add chips offer preset subcategory names (e.g. "Rent", "Groceries")
+5. Custom subcategories via text input + "Add" button
+6. Delete subcategory with confirmation; transaction references are fixed
+
+#### 4. Expense Entry
+1. **Add Expense tab**: single-form UI (`aeSubmit()`) — name, category, subcategory, date, amount
+2. **Row-based entry**: `addExpenseRow()` creates table rows; `saveAllExpenses()` batch-saves
+3. On save: `sub.spent` is incremented, transaction is pushed to `d.txs`
+4. Edit modal (`openEdit`/`saveEdit`): reverses old spent, applies new spent, updates transaction
+5. Delete: `deleteTx(id)` reverses spent, removes from `d.txs`
+6. CSV export: `exportData()` generates and downloads a CSV file
+
+#### 5. Dashboard
+1. **Stat cards**: Take-Home Income, Planned Budget, Spent So Far, Left to Spend
+2. **Category cards**: Read-only view with progress bars per subcategory
+3. **Recent transactions**: Sorted by date descending
+4. **Month tabs**: Switch between months, create new months, delete months
+
+### Design System
+
+```css
+:root {
+  /* Backgrounds */
+  --bg: #0f0f10;          /* Page background */
+  --s1: #1c1c1e;          /* Surface 1 (sidebar) */
+  --s2: #2c2c2e;          /* Surface 2 (cards) */
+  --s3: #3a3a3c;          /* Surface 3 (inputs) */
+
+  /* Text */
+  --t1: #ffffff;          /* Primary text */
+  --t2: #8E8E93;          /* Secondary text */
+  --t3: rgba(255,255,255,.35);  /* Tertiary/muted */
+  --t4: rgba(255,255,255,.5);   /* Quaternary */
+
+  /* Lines/Borders */
+  --ln: rgba(255,255,255,.05);
+  --ln2: rgba(255,255,255,.10);
+  --ln3: rgba(255,255,255,.18);
+
+  /* Selection */
+  --sel-bg: rgba(255,255,255,.08);
+  --sel-text: #ffffff;
+
+  /* Category Colors */
+  --c-growth: #0A84FF;
+  --c-lifestyle: #BF5AF2;
+  --c-savings: #FFD60A;
+
+  /* Radii */
+  --r-sm: 10px; --r-md: 16px; --r-lg: 20px; --r-xl: 28px;
+
+  /* Typography */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --ease: cubic-bezier(.16,1,.3,1);
+}
+```
+
+### Common Patterns
+
+**Mutate → Persist → Render:**
+```js
+function someAction() {
+  var d = activeData();
+  // 1. Mutate STATE
+  d.someField = newValue;
+  // 2. Persist + re-render
+  saveAndRender();
+}
+```
+
+**Money formatting:**
+```js
+// Storage: always round to 2 decimals
+var amount = Math.round(value * 100) / 100;
+
+// Display: always use money()
+el.textContent = money(amount);  // "$1,234.56"
+```
+
+**DOM access:**
+```js
+// Use $id() helper, not document.getElementById directly
+var el = $id("someElement");
+```
+
+**Destructive actions:**
+```js
+if (!confirm("Delete this?")) return;
+// ... perform deletion
+saveAndRender();
+```
+
+### External Services
+
+| Service | Config Location | Purpose |
+|---|---|---|
+| Supabase | `js/supabase-client.js` | Auth (email/passkey) + data persistence (`user_budgets` table) |
+| OneSignal | `index.html` (script tag) + `OneSignalSDKWorker.js` | Push notifications for budget reminders |
+| GitHub Pages | Repository settings | Hosting at `santiagojleons.github.io` |
+
+### Anti-Patterns to Avoid
+
+- ❌ Direct `document.getElementById` — use `$id()`
+- ❌ Raw floating-point money math — always `Math.round(v * 100) / 100`
+- ❌ Mutating `STATE` without calling `saveState()` or `saveAndRender()`
+- ❌ Reading `STATE.months[key]` directly — use `activeData()`
+- ❌ Creating new files without adding `<script>` tags in `index.html`
+- ❌ Hardcoding colors/spacing — use CSS variables from `:root`
+- ❌ ES modules (`import`/`export`) — all code shares global `window` scope
+- ❌ Adding frameworks or build tools — this is zero-build vanilla JS
+- ❌ Silent Supabase errors — always `console.error` + user feedback
+- ❌ Destructive actions without `confirm()` guard

@@ -7,6 +7,7 @@ function render(){
   var base=income>0?income:(assigned||1);
 
   renderMonthTabs();
+  renderMonthPickerList();
   var _txLbl = document.getElementById('txMonthLabel');
   if(_txLbl) _txLbl.textContent = STATE.activeMonth;
 

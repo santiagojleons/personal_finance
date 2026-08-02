@@ -198,17 +198,6 @@ tbody tr:last-child td{border-bottom:none}
 .fg label{display:block;font-size:.73rem;color:var(--t2);margin-bottom:5px;font-weight:500}
 #budgetProfileBlock{background:var(--s1);border:1px solid var(--ln2);border-radius:var(--r-md);padding:20px 24px;box-shadow:0 1px 12px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04);width:100%}
 
-/* Month Picker Modal */
-.mp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:10px 12px;border-radius:var(--r-sm);background:transparent;border:none;color:var(--t1);font-size:.85rem;font-weight:500;cursor:pointer;font-family:var(--font);text-align:left;transition:background .12s}
-.mp-row:hover{background:rgba(255,255,255,.07)}
-.mp-row.active{background:rgba(255,255,255,.10);font-weight:700}
-.mp-row-name{flex:1;min-width:0}
-.mp-row-check{color:var(--c-growth);font-size:.8rem;font-weight:700}
-.mp-row-new{border-top:1px solid var(--ln2);margin-top:4px;padding-top:12px}
-.mp-divider{height:1px;background:var(--ln2);margin:4px 0}
-.dash-month-label{transition:opacity .15s}
-.dash-month-label:hover{opacity:.7}
-
 #mobileNav{display:none;position:fixed;bottom:calc(14px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:430px;background:rgba(20,20,22,.93);backdrop-filter:blur(28px) saturate(200%);-webkit-backdrop-filter:blur(28px) saturate(200%);border:1px solid rgba(255,255,255,.1);border-radius:28px;padding:6px 2px;z-index:9998;justify-content:space-around;align-items:center;box-shadow:0 12px 50px rgba(0,0,0,.7),inset 0 0.5px 0 rgba(255,255,255,.08);}
 .mnav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:none;color:#8E8E93;font-family:var(--font);font-size:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;padding:5px 4px;border-radius:16px;transition:color .18s var(--ease);flex:1;min-width:0;position:relative;-webkit-tap-highlight-color:transparent;}
 .mnav-pip{display:none;position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:16px;pointer-events:none;}
